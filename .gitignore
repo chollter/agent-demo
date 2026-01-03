@@ -3,6 +3,7 @@ application-local.yml
 
 HELP.md
 target/
+.claude/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -34,3 +35,4 @@ build/
 
 ### VS Code ###
 .vscode/
+/.claude/
