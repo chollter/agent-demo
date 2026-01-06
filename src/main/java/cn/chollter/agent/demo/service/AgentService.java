@@ -6,6 +6,7 @@ import cn.chollter.agent.demo.core.ReActAgent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,6 +20,9 @@ public class AgentService {
     private static final Logger log = LoggerFactory.getLogger(AgentService.class);
 
     private final ReActAgent agent;
+
+    @Value("${agent.model.provider:openai}")
+    private String modelProvider;
 
     public AgentService(@Qualifier("reActAgent") ReActAgent agent) {
         this.agent = agent;
@@ -52,9 +56,16 @@ public class AgentService {
      * 获取Agent信息
      */
     public String getAgentInfo() {
-        return String.format("Agent名称: %s\n描述: %s\n可用工具: %d个",
+        String providerName = switch (modelProvider.toLowerCase()) {
+            case "ollama" -> "本地Ollama";
+            case "openai" -> "阿里云通义千问";
+            default -> "未知";
+        };
+
+        return String.format("Agent名称: %s\n描述: %s\n模型提供商: %s\n可用工具: %d个",
             agent.getName(),
             agent.getDescription(),
+            providerName,
             agent.getTools().size());
     }
 }

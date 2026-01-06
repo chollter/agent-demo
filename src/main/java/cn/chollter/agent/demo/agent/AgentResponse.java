@@ -1,11 +1,16 @@
 package cn.chollter.agent.demo.agent;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Agent响应
  */
+@Setter
+@Getter
 public class AgentResponse {
 
     private String finalAnswer;
@@ -31,39 +36,8 @@ public class AgentResponse {
         return response;
     }
 
-    public String getFinalAnswer() {
-        return finalAnswer;
-    }
-
-    public void setFinalAnswer(String finalAnswer) {
-        this.finalAnswer = finalAnswer;
-    }
-
-    public List<ThoughtStep> getThoughtSteps() {
-        return thoughtSteps;
-    }
-
-    public void setThoughtSteps(List<ThoughtStep> thoughtSteps) {
-        this.thoughtSteps = thoughtSteps;
-    }
-
     public void addThoughtStep(ThoughtStep step) {
         this.thoughtSteps.add(step);
     }
 
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
-    public String getErrorMessage() {
-        return errorMessage;
-    }
-
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
-    }
 }

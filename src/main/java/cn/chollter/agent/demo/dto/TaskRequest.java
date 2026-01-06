@@ -1,8 +1,13 @@
 package cn.chollter.agent.demo.dto;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * 任务请求DTO
  */
+@Setter
+@Getter
 public class TaskRequest {
 
     private String task;
@@ -13,11 +18,4 @@ public class TaskRequest {
         this.task = task;
     }
 
-    public String getTask() {
-        return task;
-    }
-
-    public void setTask(String task) {
-        this.task = task;
-    }
 }

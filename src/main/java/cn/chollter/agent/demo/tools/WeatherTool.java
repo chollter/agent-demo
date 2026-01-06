@@ -30,7 +30,7 @@ public class WeatherTool implements Tool {
 
     @Override
     public String execute(Map<String, Object> parameters) {
-        String city = getString(parameters, "city");
+        String city = getString(parameters);
 
         if (city == null || city.isEmpty()) {
             return "Error: city parameter is required";
@@ -46,8 +46,8 @@ public class WeatherTool implements Tool {
             city, temperature, condition, humidity);
     }
 
-    private String getString(Map<String, Object> params, String key) {
-        Object value = params.get(key);
+    private String getString(Map<String, Object> params) {
+        Object value = params.get("city");
         return value != null ? value.toString() : "";
     }
 }

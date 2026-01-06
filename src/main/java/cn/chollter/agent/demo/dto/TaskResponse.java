@@ -1,12 +1,16 @@
 package cn.chollter.agent.demo.dto;
 
 import cn.chollter.agent.demo.agent.ThoughtStep;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
 
 /**
  * 任务响应DTO
  */
+@Setter
+@Getter
 public class TaskResponse {
 
     private String finalAnswer;
@@ -25,35 +29,4 @@ public class TaskResponse {
         return response;
     }
 
-    public String getFinalAnswer() {
-        return finalAnswer;
-    }
-
-    public void setFinalAnswer(String finalAnswer) {
-        this.finalAnswer = finalAnswer;
-    }
-
-    public List<ThoughtStep> getThoughtSteps() {
-        return thoughtSteps;
-    }
-
-    public void setThoughtSteps(List<ThoughtStep> thoughtSteps) {
-        this.thoughtSteps = thoughtSteps;
-    }
-
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public void setSuccess(boolean success) {
-        this.success = success;
-    }
-
-    public String getErrorMessage() {
-        return errorMessage;
-    }
-
-    public void setErrorMessage(String errorMessage) {
-        this.errorMessage = errorMessage;
-    }
 }

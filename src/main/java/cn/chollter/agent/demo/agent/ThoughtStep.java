@@ -1,8 +1,13 @@
 package cn.chollter.agent.demo.agent;
 
+import lombok.Getter;
+import lombok.Setter;
+
 /**
  * 思考步骤（用于ReAct模式）
  */
+@Setter
+@Getter
 public class ThoughtStep {
 
     private StepType stepType;
@@ -21,19 +26,4 @@ public class ThoughtStep {
         OBSERVATION // 观察
     }
 
-    public StepType getStepType() {
-        return stepType;
-    }
-
-    public void setStepType(StepType stepType) {
-        this.stepType = stepType;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
 }
