@@ -3,6 +3,7 @@ package cn.chollter.agent.demo.controller;
 import cn.chollter.agent.demo.dto.TaskRequest;
 import cn.chollter.agent.demo.dto.TaskResponse;
 import cn.chollter.agent.demo.service.AgentService;
+import lombok.AllArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -13,15 +14,12 @@ import org.springframework.web.bind.annotation.*;
  */
 @RestController
 @RequestMapping("/api/agent")
+@AllArgsConstructor
 public class AgentController {
 
     private static final Logger log = LoggerFactory.getLogger(AgentController.class);
 
     private final AgentService agentService;
-
-    public AgentController(AgentService agentService) {
-        this.agentService = agentService;
-    }
 
     /**
      * 执行任务
