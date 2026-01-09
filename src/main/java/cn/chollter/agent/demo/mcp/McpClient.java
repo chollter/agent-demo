@@ -1,5 +1,8 @@
 package cn.chollter.agent.demo.mcp;
 
+import cn.chollter.agent.demo.mcp.dto.McpResource;
+import cn.chollter.agent.demo.mcp.dto.ResourceContent;
+import cn.chollter.agent.demo.mcp.dto.ResourceTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
@@ -222,7 +225,7 @@ public class McpClient implements AutoCloseable {
                     if (item instanceof Map) {
                         Object text = ((Map<?, ?>) item).get("text");
                         if (text != null) {
-                            if (sb.length() > 0) sb.append("\n");
+                            if (!sb.isEmpty()) sb.append("\n");
                             sb.append(text);
                         }
                     }
@@ -243,6 +246,136 @@ public class McpClient implements AutoCloseable {
             }
         }
         return "{}";
+    }
+
+    // ==================== 资源访问相关方法 ====================
+
+    /**
+     * 列出所有可用的资源
+     * 对应MCP协议的 resources/list 方法
+     */
+    public List<McpResource> listResources() throws IOException {
+        Map<String, Object> response = sendRequest("resources/list", Map.of());
+        Object result = response.get("result");
+
+        if (result instanceof Map) {
+            List<Map<String, Object>> resourceList = (List<Map<String, Object>>) ((Map<?, ?>) result).get("resources");
+            List<McpResource> resources = new ArrayList<>();
+
+            for (Map<String, Object> resourceMap : resourceList) {
+                McpResource resource = McpResource.builder()
+                    .uri((String) resourceMap.get("uri"))
+                    .name((String) resourceMap.get("name"))
+                    .description((String) resourceMap.get("description"))
+                    .mimeType((String) resourceMap.get("mimeType"))
+                    .metadata((Map<String, Object>) resourceMap.get("metadata"))
+                    .build();
+                resources.add(resource);
+            }
+
+            return resources;
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * 读取指定URI的资源内容
+     * 对应MCP协议的 resources/read 方法
+     */
+    public ResourceContent readResource(String uri) throws IOException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("uri", uri);
+
+        Map<String, Object> response = sendRequest("resources/read", params);
+        Object result = response.get("result");
+
+        if (result instanceof Map) {
+            Map<?, ?> resultMap = (Map<?, ?>) result;
+            return ResourceContent.builder()
+                .uri((String) resultMap.get("uri"))
+                .mimeType((String) resultMap.get("mimeType"))
+                .text((String) resultMap.get("text"))
+                .blob((String) resultMap.get("blob"))
+                .build();
+        }
+
+        throw new IOException("无效的资源响应: " + result);
+    }
+
+    /**
+     * 列出所有可用的资源模板
+     * 对应MCP协议的 resources/templates/list 方法
+     */
+    public List<ResourceTemplate> listResourceTemplates() throws IOException {
+        Map<String, Object> response = sendRequest("resources/templates/list", Map.of());
+        Object result = response.get("result");
+
+        if (result instanceof Map) {
+            List<Map<String, Object>> templateList = (List<Map<String, Object>>) ((Map<?, ?>) result).get("resourceTemplates");
+            List<ResourceTemplate> templates = new ArrayList<>();
+
+            for (Map<String, Object> templateMap : templateList) {
+                ResourceTemplate template = ResourceTemplate.builder()
+                    .uriTemplate((String) templateMap.get("uriTemplate"))
+                    .name((String) templateMap.get("name"))
+                    .description((String) templateMap.get("description"))
+                    .mimeType((String) templateMap.get("mimeType"))
+                    .parameters((Map<String, Object>) templateMap.get("parameters"))
+                    .build();
+                templates.add(template);
+            }
+
+            return templates;
+        }
+
+        return Collections.emptyList();
+    }
+
+    /**
+     * 读取资源模板
+     * 对应MCP协议的 resources/read 方法（使用模板URI）
+     */
+    public ResourceContent readResourceTemplate(String uriTemplate, Map<String, Object> arguments) throws IOException {
+        // 替换URI模板中的参数
+        String resolvedUri = resolveUriTemplate(uriTemplate, arguments);
+        return readResource(resolvedUri);
+    }
+
+    /**
+     * 解析URI模板，替换参数占位符
+     */
+    private String resolveUriTemplate(String uriTemplate, Map<String, Object> arguments) {
+        String resolved = uriTemplate;
+        for (Map.Entry<String, Object> entry : arguments.entrySet()) {
+            String placeholder = "{" + entry.getKey() + "}";
+            if (resolved.contains(placeholder)) {
+                resolved = resolved.replace(placeholder, String.valueOf(entry.getValue()));
+            }
+        }
+        return resolved;
+    }
+
+    /**
+     * 订阅资源更新
+     * 对应MCP协议的 resources/subscribe 方法
+     */
+    public void subscribeResource(String uri) throws IOException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("uri", uri);
+        sendRequest("resources/subscribe", params);
+        log.info("已订阅资源更新: {}", uri);
+    }
+
+    /**
+     * 取消订阅资源更新
+     * 对应MCP协议的 resources/unsubscribe 方法
+     */
+    public void unsubscribeResource(String uri) throws IOException {
+        Map<String, Object> params = new HashMap<>();
+        params.put("uri", uri);
+        sendRequest("resources/unsubscribe", params);
+        log.info("已取消订阅资源更新: {}", uri);
     }
 
     @Override

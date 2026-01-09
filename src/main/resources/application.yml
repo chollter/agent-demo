@@ -2,7 +2,60 @@ spring:
   application:
     name: agent-demo
   profiles:
-    active: local
+    active: ${SPRING_PROFILE:local}
+
+  # 通用 JPA 配置
+  jpa:
+    open-in-view: false
 
 server:
-  port: 8090
+  port: ${SERVER_PORT:8090}
+  shutdown: graceful
+
+# Agent 通用配置
+agent:
+  security:
+    enabled: ${AGENT_SECURITY_ENABLED:false}
+    api-key: ${AGENT_API_KEY:dev-api-key-12345}
+  model:
+    provider: ${AGENT_MODEL_PROVIDER:openai}
+
+# Spring AI 配置（所有环境共享）
+spring.ai:
+  # 向量存储配置
+  vectorstore:
+    pgvector:
+      dimension: 1536  # OpenAI 嵌入维度（text-embedding-3-small）
+      distance-type: cosine  # 距离类型：cosine, euclidean, inner_product
+      remove-existing-vector-store-table: false
+
+  # 阿里云通义千问配置
+  openai:
+    base-url: https://dashscope.aliyuncs.com/compatible-mode
+    api-key: ${AI_API_KEY:}
+    chat:
+      model: ${AI_MODEL:qwen-max}
+      temperature: ${AI_TEMPERATURE:0.7}
+      max-tokens: ${AI_MAX_TOKENS:2000}
+    embedding:
+      # 嵌入模型配置（用于文本向量化）
+      model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
+      dimensions: 1536
+
+  # 本地 Ollama 配置
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    chat:
+      model: ${OLLAMA_MODEL:qwen2.5:7b}
+      temperature: ${OLLAMA_TEMPERATURE:0.7}
+    embedding:
+      # Ollama 嵌入模型
+      model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
+
+# 日志配置
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+  level:
+    root: INFO
+    cn.chollter.agent.demo: ${LOG_LEVEL:DEBUG}
