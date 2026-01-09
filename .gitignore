@@ -1,12 +1,17 @@
 ### CUSTOM ###
 application-local.yml
+.env
+*.iml
+### frontend ###
+**/node_modules
+
 
 HELP.md
 target/
 .claude/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
-!**/src/test/**/target/
+!**/src/test
 
 ### STS ###
 .apt_generated
@@ -36,3 +41,5 @@ build/
 ### VS Code ###
 .vscode/
 /.claude/
+/src/test/
+/src/test/

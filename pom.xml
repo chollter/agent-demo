@@ -24,6 +24,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- JPA for Database -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <!-- postgresql Database  -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Redis for Caching -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
         <!-- OpenAI 支持（用于阿里云通义千问） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -67,6 +88,64 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
         </dependency>
+        <!-- Jackson JSR310 for Java 8 date/time types (LocalDateTime, etc.) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <!-- Caffeine Cache for local caching -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+        <!-- Dotenv support for .env file -->
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>spring-dotenv</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <!-- 备选方案：更成熟的 dotenv-java -->
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        <!-- Knife4j API Documentation -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <version>4.5.0</version>
+        </dependency>
+        <!-- PostgreSQL pgvector 向量搜索支持 -->
+        <!-- 暂时注释掉：需要 pgvector-hibernate 依赖 -->
+        <!--<dependency>
+            <groupId>com.pgvector</groupId>
+            <artifactId>pgvector</artifactId>
+            <version>0.1.4</version>
+        </dependency>-->
+
+        <!-- Spring AI PostgreSQL Vector Store -->
+        <!-- 注释掉：Spring AI 1.1.2 版本中不存在此依赖 -->
+        <!--<dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-postgres-vector-store</artifactId>
+            <version>${spring-ai.version}</version>
+        </dependency>-->
+
+        <!-- Spring AI Transformers (用于文本嵌入) -->
+        <!-- 暂时注释掉：项目暂未使用 -->
+        <!--<dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-transformers</artifactId>
+        </dependency>-->
+
+        <!-- Milvus Java SDK (备用向量数据库) -->
+        <!-- 暂时注释掉：项目暂未使用 -->
+        <!--<dependency>
+            <groupId>io.milvus</groupId>
+            <artifactId>milvus-sdk-java</artifactId>
+            <version>2.4.1</version>
+        </dependency>-->
     </dependencies>
 
     <repositories>
@@ -108,7 +187,53 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.1</version>
+                <configuration>
+                    <source>21</source>
+                    <target>21</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.34</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Dotenv Maven Plugin - 自动加载 .env 文件 -->
+            <!-- Dotenv Maven Plugin - 自动加载 .env 文件 -->
+            <!-- 暂时注释掉，插件无法下载 -->
+            <!--<plugin>
+                <groupId>me.paulschwarz</groupId>
+                <artifactId>spring-dotenv-maven-plugin</artifactId>
+                <version>4.0.0</version>
+                <executions>
+                    <execution>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>export</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <dotenvPath>${project.basedir}/.env</dotenvPath>
+                    <ignoreMissingEnvFile>false</ignoreMissingEnvFile>
+                    <systemPropertyOutput>true</systemPropertyOutput>
+                    <failOnMissing>false</failOnMissing>
+                </configuration>
+            </plugin>-->
         </plugins>
     </build>
 
