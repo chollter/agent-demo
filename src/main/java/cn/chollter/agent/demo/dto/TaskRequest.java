@@ -35,4 +35,14 @@ public class TaskRequest {
     @Size(min = 1, max = 2000, message = "任务内容长度必须在 1-2000 字符之间")
     private String task;
 
+    /**
+     * 会话ID（可选，用于多轮对话）
+     */
+    @Schema(
+            description = "会话ID，用于多轮对话上下文",
+            example = "conv-a1b2c3d4e5f6",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED
+    )
+    private String conversationId;
+
 }

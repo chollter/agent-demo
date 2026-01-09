@@ -55,9 +55,9 @@ public class AgentController {
     public ResponseEntity<TaskResponse> execute(
             @Parameter(description = "任务请求对象", required = true)
             @Valid @RequestBody TaskRequest request) {
-        log.info("收到任务请求: {}", request.getTask());
+        log.info("收到任务请求: {}, 会话ID: {}", request.getTask(), request.getConversationId());
 
-        var agentResponse = agentService.executeTask(request.getTask());
+        var agentResponse = agentService.executeTask(request.getConversationId(), request.getTask());
         return ResponseEntity.ok(TaskResponse.fromAgentResponse(agentResponse));
     }
 

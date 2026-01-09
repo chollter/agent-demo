@@ -24,6 +24,12 @@ import java.util.List;
 public class TaskResponse {
 
     /**
+     * 会话ID
+     */
+    @Schema(description = "会话ID，用于多轮对话", example = "conv-a1b2c3d4e5f6")
+    private String conversationId;
+
+    /**
      * 最终答案
      */
     @Schema(description = "AI Agent 的最终答案", example = "根据查询结果，最近一周共有 50 条执行记录，其中成功 45 条，失败 5 条，成功率为 90%。")
@@ -67,6 +73,7 @@ public class TaskResponse {
 
     public static TaskResponse fromAgentResponse(cn.chollter.agent.demo.agent.AgentResponse agentResponse) {
         return TaskResponse.builder()
+                .conversationId(agentResponse.getConversationId())
                 .finalAnswer(agentResponse.getFinalAnswer())
                 .thoughtSteps(agentResponse.getThoughtSteps())
                 .success(agentResponse.isSuccess())

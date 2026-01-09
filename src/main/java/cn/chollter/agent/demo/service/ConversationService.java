@@ -60,7 +60,7 @@ public class ConversationService {
      * 使用 Spring Cache 缓存结果
      * 如果 conversationId 为 null，直接返回 Optional.empty()
      */
-    @Cacheable(value = "conversations", key = "#conversationId", unless = "#conversationId == null")
+    // @Cacheable(value = "conversations", key = "#conversationId", unless = "#conversationId == null")
     public Optional<Conversation> getConversationByConversationId(String conversationId) {
         if (conversationId == null) {
             log.debug("conversationId 为 null，返回空 Optional");
@@ -68,6 +68,21 @@ public class ConversationService {
         }
         log.debug("从数据库查询会话: {}", conversationId);
         return conversationRepository.findByConversationId(conversationId);
+    }
+
+    /**
+     * 根据 conversationId 获取会话，并预加载 executions
+     * 此方法不使用缓存，避免 LazyInitializationException
+     * 用于需要访问 executions 集合的场景
+     */
+    @Transactional(readOnly = true)
+    public Optional<Conversation> getConversationByConversationIdWithExecutions(String conversationId) {
+        if (conversationId == null) {
+            log.debug("conversationId 为 null，返回空 Optional");
+            return Optional.empty();
+        }
+        log.debug("从数据库查询会话（含 executions）: {}", conversationId);
+        return conversationRepository.findByConversationIdWithExecutions(conversationId);
     }
 
     /**

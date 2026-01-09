@@ -1,6 +1,7 @@
 package cn.chollter.agent.demo.entity;
 
 import cn.chollter.agent.demo.agent.ThoughtStep;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -104,11 +105,13 @@ public class Execution {
      */
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 
     /**
      * 完成时间
      */
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime completedAt;
 
     /**
@@ -116,6 +119,7 @@ public class Execution {
      */
     @UpdateTimestamp
     @Column(nullable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
 
     /**

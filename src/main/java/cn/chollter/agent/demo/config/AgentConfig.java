@@ -107,15 +107,4 @@ public class AgentConfig {
 
         return new ReActAgent(chatModel, allTools, objectMapper);
     }
-
-    /**
-     * 配置ObjectMapper
-     */
-    @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        mapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        return mapper;
-    }
 }

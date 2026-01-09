@@ -1,5 +1,4 @@
 ### CUSTOM ###
-application-local.yml
 .env
 *.iml
 ### frontend ###
