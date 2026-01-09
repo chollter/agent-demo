@@ -3,6 +3,7 @@ package cn.chollter.agent.demo.service;
 import cn.chollter.agent.demo.agent.AgentResponse;
 import cn.chollter.agent.demo.agent.Message;
 import cn.chollter.agent.demo.core.ReActAgent;
+import cn.chollter.agent.demo.entity.Conversation;
 import cn.chollter.agent.demo.entity.Execution;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -10,7 +11,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Agent 服务
@@ -25,16 +28,19 @@ public class AgentService {
 
     private final ReActAgent agent;
     private final ExecutionService executionService;
+    private final ConversationService conversationService;
 
     @Value("${agent.model.provider:openai}")
     private String modelProvider;
 
     public AgentService(
             @Qualifier("reActAgent") ReActAgent agent,
-            ExecutionService executionService
+            ExecutionService executionService,
+            ConversationService conversationService
     ) {
         this.agent = agent;
         this.executionService = executionService;
+        this.conversationService = conversationService;
     }
 
     /**
@@ -46,19 +52,30 @@ public class AgentService {
 
     /**
      * 执行任务（带会话ID，用于多轮对话）
+     * 返回 AgentResponse
+     * 会通过 execution 获取实际的 conversationId
      */
     public AgentResponse executeTask(String conversationId, String task) {
         log.info("执行任务: {}, 会话ID: {}", task, conversationId);
 
+        // 获取会话历史
+        List<Message> history = new ArrayList<>();
+        if (conversationId != null) {
+            history = loadConversationHistory(conversationId);
+            log.debug("加载了 {} 条历史消息", history.size());
+        }
+
         // 创建执行记录
         Execution execution = executionService.createExecution(conversationId, task);
         String executionId = execution.getExecutionId();
+        // 获取实际的 conversationId（可能是新创建的）
+        String actualConversationId = execution.getConversation().getConversationId();
 
         long startTime = System.currentTimeMillis();
 
         try {
-            // 执行任务
-            AgentResponse response = agent.execute(task);
+            // 执行任务（带历史）
+            AgentResponse response = agent.execute(task, history);
 
             long duration = System.currentTimeMillis() - startTime;
 
@@ -80,6 +97,8 @@ public class AgentService {
                 executionService.failExecution(executionId, response.getErrorMessage(), duration);
             }
 
+            // 将 conversationId 设置到响应中
+            response.setConversationId(actualConversationId);
             return response;
 
         } catch (Exception e) {
@@ -91,6 +110,36 @@ public class AgentService {
 
             throw e;
         }
+    }
+
+    /**
+     * 加载会话历史
+     * 从数据库获取指定会话的历史消息
+     */
+    private List<Message> loadConversationHistory(String conversationId) {
+        return conversationService.getConversationByConversationIdWithExecutions(conversationId)
+                .map(conversation -> {
+                    List<Message> messages = new ArrayList<>();
+                    if (conversation.getExecutions() != null) {
+                        // 按时间顺序添加历史消息
+                        conversation.getExecutions().stream()
+                                .filter(e -> e.getSuccess() && e.getFinalAnswer() != null)
+                                .forEach(execution -> {
+                                    // 添加用户消息
+                                    messages.add(new Message(
+                                            Message.Role.USER,
+                                            execution.getTask()
+                                    ));
+                                    // 添加助手回复
+                                    messages.add(new Message(
+                                            Message.Role.ASSISTANT,
+                                            execution.getFinalAnswer()
+                                    ));
+                                });
+                    }
+                    return messages;
+                })
+                .orElse(new ArrayList<>());
     }
 
     /**

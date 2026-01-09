@@ -4,6 +4,12 @@ spring:
   profiles:
     active: ${SPRING_PROFILE:local}
 
+  # Jackson 配置（支持 Java 8 时间类型）
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
   # 通用 JPA 配置
   jpa:
     open-in-view: false
@@ -58,4 +64,4 @@ logging:
     console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
   level:
     root: INFO
-    cn.chollter.agent.demo: ${LOG_LEVEL:DEBUG}
+    cn.chollter.agent.demo: ${LOG_LEVEL:INFO}

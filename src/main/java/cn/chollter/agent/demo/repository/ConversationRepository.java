@@ -25,6 +25,13 @@ public interface ConversationRepository extends JpaRepository<Conversation, Long
     Optional<Conversation> findByConversationId(String conversationId);
 
     /**
+     * 根据 conversationId 查找会话，并预加载 executions
+     * 使用 JOIN FETCH 避免 LazyInitializationException
+     */
+    @Query("SELECT c FROM Conversation c LEFT JOIN FETCH c.executions WHERE c.conversationId = :conversationId")
+    Optional<Conversation> findByConversationIdWithExecutions(@Param("conversationId") String conversationId);
+
+    /**
      * 查找活跃的会话
      */
     List<Conversation> findByStatus(Conversation.ConversationStatus status);

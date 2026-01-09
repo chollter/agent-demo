@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, Button, Avatar, Space, Empty } from 'antd'
+import { Input, Button, Avatar, Empty } from 'antd'
 import { SendOutlined, UserOutlined, RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'

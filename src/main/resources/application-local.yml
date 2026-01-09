@@ -1,0 +1,83 @@
+# 本地开发环境配置
+spring:
+  # 本地数据库配置
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      pool-name: AgentDemoHikariCP
+
+  jpa:
+    hibernate:
+      ddl-auto: update  # 本地开发自动更新表结构
+    show-sql: false  # 本地开发显示 SQL
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 本地 Redis 配置
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+#      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB}
+      timeout: 3000
+
+# MCP 服务器本地配置
+mcp:
+  enabled: ${MCP_ENABLED:true}
+  servers:
+    # 文件系统工具
+    - name: filesystem
+      type: stdio
+      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
+      args:
+        - '-y'
+        - '@modelcontextprotocol/server-filesystem'
+        - ${PROJECT_PATH:.}
+      enabled: ${MCP_FILESYSTEM_ENABLED:true}
+
+    # GitHub 工具
+    - name: github
+      type: stdio
+      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
+      args:
+        - '-y'
+        - '@modelcontextprotocol/server-github'
+      env:
+        - GITHUB_TOKEN=${GITHUB_TOKEN}
+      enabled: ${MCP_GITHUB_ENABLED:true}
+
+    # PostgreSQL 数据库工具
+    - name: database
+      type: stdio
+      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
+      args:
+        - '-y'
+        - '@modelcontextprotocol/server-postgres'
+        - postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      enabled: ${MCP_DATABASE_ENABLED:true}
+
+    # Brave 搜索工具
+    - name: brave-search
+      type: stdio
+      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
+      args:
+        - '-y'
+        - '@modelcontextprotocol/server-brave-search'
+      env:
+        - BRAVE_API_KEY=${BRAVE_API_KEY:}
+      enabled: ${MCP_BRAVE_ENABLED:false}
+
+# 日志配置（本地开发更详细）
+logging:
+  level:
+    cn.chollter.agent.demo: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE

@@ -13,6 +13,7 @@ import java.util.List;
 @Getter
 public class AgentResponse {
 
+    private String conversationId;
     private String finalAnswer;
     private List<ThoughtStep> thoughtSteps = new ArrayList<>();
     private boolean success;

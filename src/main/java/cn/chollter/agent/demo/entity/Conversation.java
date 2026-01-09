@@ -1,5 +1,7 @@
 package cn.chollter.agent.demo.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -65,6 +67,7 @@ public class Conversation {
      */
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 
     /**
@@ -72,11 +75,14 @@ public class Conversation {
      */
     @UpdateTimestamp
     @Column(nullable = false)
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
 
     /**
      * 关联的任务执行记录
+     * 使用 @JsonIgnore 避免 Redis 序列化时的懒加载异常
      */
+    @JsonIgnore
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Execution> executions = new ArrayList<>();
 

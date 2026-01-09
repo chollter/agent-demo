@@ -15,6 +15,7 @@ function App() {
     id: string
     title: string
     createdAt: string
+    backendConversationId?: string  // 后端返回的真实 conversationId
     messages: Array<{
       id: string
       role: 'user' | 'assistant'
@@ -31,6 +32,8 @@ function App() {
 
     // 创建或获取对话
     let conversationId = currentConversationId
+    // 获取后端返回的真实 conversationId
+    let backendConversationId: string | undefined = conversations.find(c => c.id === conversationId)?.backendConversationId
 
     if (!conversationId) {
       const newConversation = {
@@ -70,7 +73,10 @@ function App() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ task: content })
+        body: JSON.stringify({
+          task: content,
+          conversationId: backendConversationId  // 使用后端返回的 conversationId
+        })
       })
 
       if (!response.ok) {
@@ -78,6 +84,17 @@ function App() {
       }
 
       const data = await response.json()
+
+      // 保存后端返回的 conversationId
+      if (data.conversationId && !backendConversationId) {
+        setConversations(prev => prev.map(conv => {
+          if (conv.id === conversationId) {
+            return { ...conv, backendConversationId: data.conversationId }
+          }
+          return conv
+        }))
+        backendConversationId = data.conversationId
+      }
 
       // 添加助手消息
       const assistantMessage = {
