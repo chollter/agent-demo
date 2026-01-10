@@ -16,6 +16,11 @@ interface Message {
   timestamp: string
   thoughtSteps?: any[]
   success?: boolean
+  tokenStats?: {
+    totalTokens: number
+    inputTokens: number
+    outputTokens: number
+  }
 }
 
 interface ChatPanelProps {
@@ -222,6 +227,24 @@ export default function ChatPanel({ messages, onSendMessage, loading }: ChatPane
                   gap: 6
                 }}>
                   {dayjs(message.timestamp).format('HH:mm:ss')}
+                  {message.role === 'assistant' && message.tokenStats && (
+                    <span style={{
+                      color: '#6b7280',
+                      background: '#f3f4f6',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 500,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      🔢 {message.tokenStats.totalTokens.toLocaleString()} tokens
+                      <span style={{ color: '#9ca3af' }}>
+                        (↑{message.tokenStats.inputTokens.toLocaleString()} ↓{message.tokenStats.outputTokens.toLocaleString()})
+                      </span>
+                    </span>
+                  )}
                   {message.role === 'assistant' && message.success === false && (
                     <span style={{
                       color: '#ef4444',
