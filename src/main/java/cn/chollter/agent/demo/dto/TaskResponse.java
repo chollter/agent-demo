@@ -71,6 +71,30 @@ public class TaskResponse {
     @Schema(description = "响应时间戳", example = "2026-01-06T18:30:00")
     private LocalDateTime timestamp;
 
+    /**
+     * Token 统计
+     */
+    @Schema(description = "Token 消耗统计")
+    private TokenStats tokenStats;
+
+    /**
+     * Token 统计内部类
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TokenStats {
+        @Schema(description = "总 Token 数量", example = "1500")
+        private int totalTokens;
+
+        @Schema(description = "输入 Token 数量", example = "1200")
+        private int inputTokens;
+
+        @Schema(description = "输出 Token 数量", example = "300")
+        private int outputTokens;
+    }
+
     public static TaskResponse fromAgentResponse(cn.chollter.agent.demo.agent.AgentResponse agentResponse) {
         return TaskResponse.builder()
                 .conversationId(agentResponse.getConversationId())
@@ -79,6 +103,11 @@ public class TaskResponse {
                 .success(agentResponse.isSuccess())
                 .errorMessage(agentResponse.getErrorMessage())
                 .timestamp(LocalDateTime.now())
+                .tokenStats(TokenStats.builder()
+                        .totalTokens(agentResponse.getTotalTokens())
+                        .inputTokens(agentResponse.getInputTokens())
+                        .outputTokens(agentResponse.getOutputTokens())
+                        .build())
                 .build();
     }
 

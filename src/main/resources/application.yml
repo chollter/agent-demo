@@ -20,11 +20,19 @@ server:
 
 # Agent 通用配置
 agent:
+  # function-calling、react
+  type: function-calling
   security:
     enabled: ${AGENT_SECURITY_ENABLED:false}
     api-key: ${AGENT_API_KEY:dev-api-key-12345}
   model:
     provider: ${AGENT_MODEL_PROVIDER:openai}
+  # 对话历史配置
+  history:
+    enabled: ${AGENT_HISTORY_ENABLED:true}  # 是否启用对话历史
+    max-messages: ${AGENT_HISTORY_MAX_MESSAGES:20}  # 最大历史消息条数
+    max-tokens: ${AGENT_HISTORY_MAX_TOKENS:4000}  # 最大历史 token 数量（避免超出模型限制）
+    recent-first: ${AGENT_HISTORY_RECENT_FIRST:true}  # 优先保留最近的消息
 
 # Spring AI 配置（所有环境共享）
 spring.ai:

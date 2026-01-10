@@ -1,6 +1,7 @@
 package cn.chollter.agent.demo.core;
 
 import cn.chollter.agent.demo.agent.*;
+import cn.chollter.agent.demo.util.TokenEstimator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +86,14 @@ public class ReActAgent implements Agent {
                         .getOutput()
                         .getText();
 
+                // 估算 Token
+                int inputTokens = TokenEstimator.estimateTokens(fullPrompt);
+                int outputTokens = TokenEstimator.estimateTokens(llmOutput);
+                response.addTokens(inputTokens, outputTokens);
+
                 log.debug("LLM输出:\n{}", llmOutput);
+                log.debug("Token 估算: 输入={}, 输出={}, 总计={}",
+                        inputTokens, outputTokens, response.getTotalTokens());
 
                 // 解析LLM输出
                 if (llmOutput.contains("Final Answer:")) {

@@ -19,6 +19,11 @@ public class AgentResponse {
     private boolean success;
     private String errorMessage;
 
+    // Token 统计
+    private int totalTokens;
+    private int inputTokens;
+    private int outputTokens;
+
     public AgentResponse() {}
 
     public AgentResponse(String finalAnswer, boolean success) {
@@ -39,6 +44,15 @@ public class AgentResponse {
 
     public void addThoughtStep(ThoughtStep step) {
         this.thoughtSteps.add(step);
+    }
+
+    /**
+     * 增加 Token 统计
+     */
+    public void addTokens(int input, int output) {
+        this.inputTokens += input;
+        this.outputTokens += output;
+        this.totalTokens = this.inputTokens + this.outputTokens;
     }
 
 }

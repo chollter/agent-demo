@@ -22,6 +22,12 @@ function App() {
       content: string
       timestamp: string
       thoughtSteps?: any[]
+      success?: boolean
+      tokenStats?: {
+        totalTokens: number
+        inputTokens: number
+        outputTokens: number
+      }
     }>
   }>>([])
 
@@ -103,7 +109,8 @@ function App() {
         content: data.finalAnswer || data.errorMessage || '抱歉，出现问题',
         timestamp: new Date().toISOString(),
         thoughtSteps: data.thoughtSteps || [],
-        success: data.success
+        success: data.success,
+        tokenStats: data.tokenStats || undefined
       }
 
       setConversations(prev => prev.map(conv => {
