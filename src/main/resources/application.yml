@@ -14,17 +14,60 @@ spring:
   jpa:
     open-in-view: false
 
+  # Redis 配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+      timeout: 1000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 500ms
+
+  # Actuator 配置（监控和健康检查）
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,prometheus,metrics
+        base-path: /actuator
+    endpoint:
+      health:
+        show-details: when-authorized
+    metrics:
+      export:
+        prometheus:
+          enabled: true
+    prometheus:
+      metrics:
+        export:
+          enabled: true
+
 server:
   port: ${SERVER_PORT:8090}
   shutdown: graceful
+  tomcat:
+    max-threads: 200
+    accept-count: 100
 
 # Agent 通用配置
 agent:
-  # function-calling、react
-  type: function-calling
   security:
-    enabled: ${AGENT_SECURITY_ENABLED:false}
-    api-key: ${AGENT_API_KEY:dev-api-key-12345}
+    enabled: ${AGENT_SECURITY_ENABLED:true}  # 生产环境必须启用
+    api-key: ${AGENT_API_KEY:}  # 必须通过环境变量配置，无默认值
+    api-key-secondary: ${AGENT_API_KEY_SECONDARY:}  # 备用 API Key，用于轮换
+    require-prefix: ${AGENT_SECURITY_REQUIRE_PREFIX:true}  # 要求 API Key 以 sk- 开头
+    # 速率限制配置
+    rate-limit:
+      enabled: ${AGENT_RATE_LIMIT_ENABLED:true}
+      capacity: ${AGENT_RATE_LIMIT_CAPACITY:20}  # 令牌桶容量
+      refill-tokens: ${AGENT_RATE_LIMIT_REFILL:20}  # 每分钟补充的令牌数
+      period: ${AGENT_RATE_LIMIT_PERIOD:60}  # 补充周期（秒）
   model:
     provider: ${AGENT_MODEL_PROVIDER:openai}
   # 对话历史配置
@@ -36,13 +79,6 @@ agent:
 
 # Spring AI 配置（所有环境共享）
 spring.ai:
-  # 向量存储配置
-  vectorstore:
-    pgvector:
-      dimension: 1536  # OpenAI 嵌入维度（text-embedding-3-small）
-      distance-type: cosine  # 距离类型：cosine, euclidean, inner_product
-      remove-existing-vector-store-table: false
-
   # 阿里云通义千问配置
   openai:
     base-url: https://dashscope.aliyuncs.com/compatible-mode
@@ -51,10 +87,6 @@ spring.ai:
       model: ${AI_MODEL:qwen-max}
       temperature: ${AI_TEMPERATURE:0.7}
       max-tokens: ${AI_MAX_TOKENS:2000}
-    embedding:
-      # 嵌入模型配置（用于文本向量化）
-      model: ${AI_EMBEDDING_MODEL:text-embedding-v3}
-      dimensions: 1536
 
   # 本地 Ollama 配置
   ollama:
@@ -62,14 +94,16 @@ spring.ai:
     chat:
       model: ${OLLAMA_MODEL:qwen2.5:7b}
       temperature: ${OLLAMA_TEMPERATURE:0.7}
-    embedding:
-      # Ollama 嵌入模型
-      model: ${OLLAMA_EMBEDDING_MODEL:nomic-embed-text}
 
 # 日志配置
 logging:
   pattern:
     console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
   level:
     root: INFO
     cn.chollter.agent.demo: ${LOG_LEVEL:INFO}
+  file:
+    name: ${LOG_FILE:logs/agent-demo.log}
+    max-size: 100MB
+    max-history: 30

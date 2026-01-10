@@ -1,6 +1,8 @@
 package cn.chollter.agent.demo.repository;
 
 import cn.chollter.agent.demo.entity.Execution;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -68,4 +70,24 @@ public interface ExecutionRepository extends JpaRepository<Execution, Long> {
      */
     @Query("SELECT AVG(e.durationMs) FROM Execution e WHERE e.durationMs IS NOT NULL")
     Double findAverageDuration();
+
+    /**
+     * 查找指定会话的成功执行记录（带分页）
+     * 在数据库层面直接过滤，避免内存处理
+     *
+     * @param conversationId 会话ID
+     * @param pageable 分页参数
+     * @return 分页的成功执行记录
+     */
+    @Query("""
+        SELECT e FROM Execution e
+        WHERE e.conversation.conversationId = :conversationId
+        AND e.success = true
+        AND e.finalAnswer IS NOT NULL
+        ORDER BY e.createdAt DESC
+        """)
+    Page<Execution> findSuccessfulExecutionsByConversationId(
+            @Param("conversationId") String conversationId,
+            Pageable pageable
+    );
 }

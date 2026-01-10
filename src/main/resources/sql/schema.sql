@@ -22,6 +22,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ============================================================================
 DROP TABLE IF EXISTS vector_store CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
 DROP TABLE IF EXISTS executions CASCADE;
 DROP TABLE IF EXISTS conversations CASCADE;
 
@@ -101,6 +102,51 @@ COMMENT ON COLUMN executions.duration_ms IS '总耗时（毫秒）';
 COMMENT ON COLUMN executions.total_tokens IS '消耗的Token数量';
 COMMENT ON COLUMN executions.thought_steps IS '思考步骤，JSON格式存储';
 COMMENT ON COLUMN executions.completed_at IS '任务完成时间';
+
+-- ============================================================================
+-- 审计日志表
+-- ============================================================================
+CREATE TABLE audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(100),
+    resource_id VARCHAR(255),
+    result VARCHAR(20),
+    error_code VARCHAR(100),
+    error_message TEXT,
+    client_ip VARCHAR(50),
+    user_agent VARCHAR(500),
+    request_path VARCHAR(500),
+    request_method VARCHAR(10),
+    metadata JSONB,
+    duration_ms BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 为审计日志表创建索引
+CREATE INDEX idx_audit_user_id ON audit_logs(user_id);
+CREATE INDEX idx_audit_action ON audit_logs(action);
+CREATE INDEX idx_audit_created_at ON audit_logs(created_at);
+CREATE INDEX idx_audit_client_ip ON audit_logs(client_ip);
+CREATE INDEX idx_audit_result ON audit_logs(result);
+
+-- 添加表注释
+COMMENT ON TABLE audit_logs IS '审计日志表，记录系统中的所有重要操作和事件';
+COMMENT ON COLUMN audit_logs.user_id IS '用户标识（API Key 或用户 ID）';
+COMMENT ON COLUMN audit_logs.action IS '操作类型（AUTHENTICATION_SUCCESS, TASK_EXECUTION_START, etc.）';
+COMMENT ON COLUMN audit_logs.resource_type IS '操作的资源类型';
+COMMENT ON COLUMN audit_logs.resource_id IS '操作的的资源 ID';
+COMMENT ON COLUMN audit_logs.result IS '操作结果（SUCCESS, FAILURE, WARNING）';
+COMMENT ON COLUMN audit_logs.error_code IS '错误代码（如果失败）';
+COMMENT ON COLUMN audit_logs.error_message IS '错误消息（如果失败）';
+COMMENT ON COLUMN audit_logs.client_ip IS '客户端 IP';
+COMMENT ON COLUMN audit_logs.user_agent IS 'User-Agent';
+COMMENT ON COLUMN audit_logs.request_path IS '请求路径';
+COMMENT ON COLUMN audit_logs.request_method IS '请求方法（GET, POST, etc.）';
+COMMENT ON COLUMN audit_logs.metadata IS '额外的元数据（JSONB 格式）';
+COMMENT ON COLUMN audit_logs.duration_ms IS '执行时长（毫秒）';
+COMMENT ON COLUMN audit_logs.created_at IS '创建时间';
 
 -- 创建更新时间触发器函数
 CREATE OR REPLACE FUNCTION update_updated_at_column()

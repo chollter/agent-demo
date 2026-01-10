@@ -43,38 +43,6 @@ mcp:
         - ${PROJECT_PATH:.}
       enabled: ${MCP_FILESYSTEM_ENABLED:true}
 
-    # GitHub 工具
-    - name: github
-      type: stdio
-      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
-      args:
-        - '-y'
-        - '@modelcontextprotocol/server-github'
-      env:
-        - GITHUB_TOKEN=${GITHUB_TOKEN}
-      enabled: ${MCP_GITHUB_ENABLED:true}
-
-    # PostgreSQL 数据库工具
-    - name: database
-      type: stdio
-      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
-      args:
-        - '-y'
-        - '@modelcontextprotocol/server-postgres'
-        - postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
-      enabled: ${MCP_DATABASE_ENABLED:true}
-
-    # Brave 搜索工具
-    - name: brave-search
-      type: stdio
-      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
-      args:
-        - '-y'
-        - '@modelcontextprotocol/server-brave-search'
-      env:
-        - BRAVE_API_KEY=${BRAVE_API_KEY:}
-      enabled: ${MCP_BRAVE_ENABLED:false}
-
 # 日志配置（本地开发更详细）
 logging:
   level:
