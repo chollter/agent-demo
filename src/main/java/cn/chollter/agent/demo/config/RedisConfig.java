@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -28,6 +29,29 @@ import java.time.Duration;
 @Configuration
 @EnableCaching
 public class RedisConfig {
+
+    /**
+     * RedisTemplate 配置
+     * 用于 ApiKeyFilter 等需要直接操作 Redis 的场景
+     */
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        // 使用 String 序列化器作为 key 的序列化器
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        template.setKeySerializer(stringSerializer);
+        template.setHashKeySerializer(stringSerializer);
+
+        // 使用 JSON 序列化器作为 value 的序列化器
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+        template.setValueSerializer(jsonSerializer);
+        template.setHashValueSerializer(jsonSerializer);
+
+        template.afterPropertiesSet();
+        return template;
+    }
 
     /**
      * 缓存管理器配置
@@ -77,6 +101,10 @@ public class RedisConfig {
                 .withCacheConfiguration("executionStats", defaultConfig.entryTtl(Duration.ofMinutes(5)))
                 // Agent 信息缓存（1小时）
                 .withCacheConfiguration("agentInfo", defaultConfig.entryTtl(Duration.ofHours(1)))
+                // 对话历史缓存（5分钟，用于快速加载）
+                .withCacheConfiguration("conversationHistory", defaultConfig.entryTtl(Duration.ofMinutes(5)))
+                // 工具执行结果缓存（10分钟，用于避免重复调用）
+                .withCacheConfiguration("toolResults", defaultConfig.entryTtl(Duration.ofMinutes(10)))
                 .build();
     }
 }

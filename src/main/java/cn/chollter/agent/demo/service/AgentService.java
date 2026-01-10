@@ -6,13 +6,18 @@ import cn.chollter.agent.demo.agent.Message;
 import cn.chollter.agent.demo.agent.ThoughtStep;
 import cn.chollter.agent.demo.entity.Conversation;
 import cn.chollter.agent.demo.entity.Execution;
-import cn.chollter.agent.demo.util.TokenEstimator;
+import cn.chollter.agent.demo.repository.ExecutionRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +37,7 @@ public class AgentService {
     private final Agent agent;
     private final ExecutionService executionService;
     private final ConversationService conversationService;
+    private final ExecutionRepository executionRepository;
 
     @Value("${agent.model.provider:openai}")
     private String modelProvider;
@@ -52,11 +58,13 @@ public class AgentService {
     public AgentService(
             @Qualifier("agent") Agent agent,
             ExecutionService executionService,
-            ConversationService conversationService
+            ConversationService conversationService,
+            ExecutionRepository executionRepository
     ) {
         this.agent = agent;
         this.executionService = executionService;
         this.conversationService = conversationService;
+        this.executionRepository = executionRepository;
     }
 
     /**
@@ -123,52 +131,51 @@ public class AgentService {
     }
 
     /**
-     * 加载会话历史
+     * 加载会话历史（带缓存）
      * 从数据库获取指定会话的历史消息
      * 支持滑动窗口和 token 数量限制
+     * 优化：添加缓存避免重复查询，使用 public 方法以便 @Cacheable 生效
      */
-    private List<Message> loadConversationHistory(String conversationId) {
+    @Cacheable(value = "conversationHistory",
+               key = "#conversationId",
+               unless = "#result.isEmpty()")
+    public List<Message> loadConversationHistory(String conversationId) {
         // 检查是否启用对话历史
         if (!historyEnabled) {
             log.debug("对话历史功能已禁用");
             return new ArrayList<>();
         }
 
-        return conversationService.getConversationByConversationIdWithExecutions(conversationId)
-                .map(conversation -> {
-                    if (conversation.getExecutions() == null || conversation.getExecutions().isEmpty()) {
-                        log.debug("会话 {} 没有执行记录", conversationId);
-                        return new ArrayList<Message>();
-                    }
+        // 使用分页查询，在数据库层面直接过滤成功的执行记录
+        // 只查询需要的数据量，避免加载所有记录
+        Pageable pageable = PageRequest.of(0, maxHistoryMessages * 2);
+        Page<Execution> executionPage = executionRepository.findSuccessfulExecutionsByConversationId(
+                conversationId, pageable);
 
-                    // 构建所有历史消息
-                    List<Message> allMessages = conversation.getExecutions().stream()
-                            .filter(e -> e.getSuccess() && e.getFinalAnswer() != null)
-                            .<Message>flatMap(execution -> {
-                                List<Message> msgs = new ArrayList<>();
-                                msgs.add(new Message(Message.Role.USER, execution.getTask()));
-                                msgs.add(new Message(Message.Role.ASSISTANT, execution.getFinalAnswer()));
-                                return msgs.stream();
-                            })
-                            .collect(Collectors.toList());
+        if (executionPage.isEmpty()) {
+            log.debug("会话 {} 没有成功的执行记录", conversationId);
+            return new ArrayList<>();
+        }
 
-                    int totalCount = allMessages.size();
-                    log.debug("会话 {} 共有 {} 条历史消息", conversationId, totalCount);
-
-                    // 应用滑动窗口策略：优先保留最近的消息
-                    List<Message> selectedMessages = applySlidingWindow(allMessages);
-
-                    // 应用 token 数量限制
-                    selectedMessages = applyTokenLimit(selectedMessages);
-
-                    log.info("对话历史: 共 {} 条，选择 {} 条，估算 {}",
-                            totalCount,
-                            selectedMessages.size(),
-                            TokenEstimator.formatTokens(estimateTokensForMessages(selectedMessages)));
-
-                    return selectedMessages;
+        // 构建历史消息
+        List<Message> allMessages = executionPage.getContent().stream()
+                .flatMap(execution -> {
+                    List<Message> msgs = new ArrayList<>();
+                    msgs.add(new Message(Message.Role.USER, execution.getTask()));
+                    msgs.add(new Message(Message.Role.ASSISTANT, execution.getFinalAnswer()));
+                    return msgs.stream();
                 })
-                .orElse(new ArrayList<Message>());
+                .collect(Collectors.toList());
+
+        int totalCount = allMessages.size();
+        log.debug("会话 {} 共有 {} 条历史消息", conversationId, totalCount);
+
+        // 应用滑动窗口策略：优先保留最近的消息
+        List<Message> selectedMessages = applySlidingWindow(allMessages);
+
+        log.info("对话历史: 共 {} 条，选择 {} 条", totalCount, selectedMessages.size());
+
+        return selectedMessages;
     }
 
     /**
@@ -187,58 +194,6 @@ public class AgentService {
             // 保留最早的消息
             return messages.subList(0, maxHistoryMessages);
         }
-    }
-
-    /**
-     * 应用 token 数量限制
-     * 从消息列表末尾开始，保留 token 数量不超过限制的消息
-     */
-    private List<Message> applyTokenLimit(List<Message> messages) {
-        if (messages.isEmpty()) {
-            return messages;
-        }
-
-        // 计算所有消息的 token 数量
-        int totalTokens = estimateTokensForMessages(messages);
-
-        if (totalTokens <= maxHistoryTokens) {
-            return messages;
-        }
-
-        log.debug("历史消息 token 数量 {} 超过限制 {}，进行裁剪",
-                TokenEstimator.formatTokens(totalTokens),
-                TokenEstimator.formatTokens(maxHistoryTokens));
-
-        // 从末尾开始保留消息，直到 token 数量超过限制
-        List<Message> result = new ArrayList<>();
-        int currentTokens = 0;
-
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message msg = messages.get(i);
-            int msgTokens = TokenEstimator.estimateTokens(msg.getContent());
-
-            if (currentTokens + msgTokens > maxHistoryTokens) {
-                break;
-            }
-
-            result.add(0, msg);
-            currentTokens += msgTokens;
-        }
-
-        log.info("Token 限制后保留 {} 条消息，估算 {}",
-                result.size(),
-                TokenEstimator.formatTokens(currentTokens));
-
-        return result;
-    }
-
-    /**
-     * 估算消息列表的总 token 数量
-     */
-    private int estimateTokensForMessages(List<Message> messages) {
-        return messages.stream()
-                .mapToInt(msg -> TokenEstimator.estimateTokens(msg.getContent()))
-                .sum();
     }
 
     /**
@@ -292,5 +247,103 @@ public class AgentService {
         } catch (Exception e) {
             log.error("异步保存执行结果失败: {}", executionId, e);
         }
+    }
+
+    /**
+     * 流式执行任务（简单版本，不带会话历史）
+     * 返回 Server-Sent Events 流
+     *
+     * @param task 用户任务
+     * @return SSE 事件流
+     */
+    public Flux<ServerSentEvent<String>> executeTaskStream(String task) {
+        return executeTaskStreamInternal(task, new ArrayList<>(), null);
+    }
+
+    /**
+     * 流式执行任务（带会话历史）
+     * 返回 Server-Sent Events 流
+     *
+     * @param conversationId 会话ID
+     * @param task 用户任务
+     * @return SSE 事件流
+     */
+    public Flux<ServerSentEvent<String>> executeTaskStream(String conversationId, String task) {
+        List<Message> history = new ArrayList<>();
+        if (conversationId != null) {
+            history = loadConversationHistory(conversationId);
+        }
+        return executeTaskStreamInternal(task, history, conversationId);
+    }
+
+    /**
+     * 流式执行任务内部实现
+     * 简化版本：只流式返回最终答案，工具调用部分仍使用同步方式
+     */
+    private Flux<ServerSentEvent<String>> executeTaskStreamInternal(
+            String task,
+            List<Message> history,
+            String conversationId) {
+
+        log.info("开始流式执行任务: {}, 会话ID: {}", task, conversationId);
+
+        // 创建执行记录
+        Execution execution = executionService.createExecution(conversationId, task);
+        String actualConversationId = execution.getConversation().getConversationId();
+
+        return Flux.create(sink -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                // 先执行完整的任务（包括工具调用）
+                AgentResponse response = agent.execute(task, history);
+
+                if (response.isSuccess() && response.getFinalAnswer() != null) {
+                    String fullAnswer = response.getFinalAnswer();
+
+                    // 模拟流式输出：按字符或词块发送
+                    int chunkSize = 10; // 每次发送 10 个字符
+                    for (int i = 0; i < fullAnswer.length(); i += chunkSize) {
+                        int end = Math.min(i + chunkSize, fullAnswer.length());
+                        String chunk = fullAnswer.substring(i, end);
+
+                        sink.next(ServerSentEvent.<String>builder()
+                                .data(chunk)
+                                .id(String.valueOf(i / chunkSize))
+                                .event("content")
+                                .build());
+
+                        // 模拟网络延迟，使流式效果更明显
+                        try {
+                            Thread.sleep(20);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+
+                    // 发送结束事件
+                    sink.next(ServerSentEvent.<String>builder()
+                            .event("end")
+                            .data(actualConversationId)
+                            .build());
+                } else {
+                    // 发送错误事件
+                    sink.next(ServerSentEvent.<String>builder()
+                            .event("error")
+                            .data(response.getErrorMessage() != null ? response.getErrorMessage() : "未知错误")
+                            .build());
+                }
+
+                sink.complete();
+
+                // 异步保存执行结果
+                long duration = System.currentTimeMillis() - startTime;
+                saveExecutionResultAsync(execution.getExecutionId(), response, duration);
+
+            } catch (Exception e) {
+                log.error("流式执行任务失败", e);
+                sink.error(e);
+            }
+        });
     }
 }

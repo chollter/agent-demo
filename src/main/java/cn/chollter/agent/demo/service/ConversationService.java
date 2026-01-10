@@ -60,7 +60,7 @@ public class ConversationService {
      * 使用 Spring Cache 缓存结果
      * 如果 conversationId 为 null，直接返回 Optional.empty()
      */
-    // @Cacheable(value = "conversations", key = "#conversationId", unless = "#conversationId == null")
+    @Cacheable(value = "conversations", key = "'cid:' + #conversationId", unless = "#conversationId == null")
     public Optional<Conversation> getConversationByConversationId(String conversationId) {
         if (conversationId == null) {
             log.debug("conversationId 为 null，返回空 Optional");
@@ -110,7 +110,7 @@ public class ConversationService {
      * 清除相关缓存
      */
     @Transactional
-    @CacheEvict(value = {"conversations", "activeConversations", "recentConversations"}, key = "#conversationId")
+    @CacheEvict(value = {"conversations", "activeConversations", "recentConversations"}, key = "'cid:' + #conversationId")
     public void archiveConversation(String conversationId) {
         conversationRepository.findByConversationId(conversationId).ifPresent(conversation -> {
             conversation.setStatus(Conversation.ConversationStatus.ARCHIVED);

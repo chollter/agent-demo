@@ -1,6 +1,7 @@
 package cn.chollter.agent.demo.agent;
 
 import java.util.Map;
+import java.time.Duration;
 
 /**
  * Agent工具接口
@@ -31,5 +32,25 @@ public interface Tool {
      */
     default String getParameterSchema() {
         return "{}";
+    }
+
+    /**
+     * 是否可以缓存此工具的结果
+     * 对于查询类工具（如天气、搜索），返回 true 可以避免重复调用
+     *
+     * @return true 表示结果可缓存
+     */
+    default boolean isCacheable() {
+        return false;
+    }
+
+    /**
+     * 获取缓存过期时间
+     * 只在 isCacheable() 返回 true 时生效
+     *
+     * @return 缓存过期时间，默认 5 分钟
+     */
+    default Duration getCacheTtl() {
+        return Duration.ofMinutes(5);
     }
 }

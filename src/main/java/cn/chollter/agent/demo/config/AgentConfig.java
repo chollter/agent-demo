@@ -3,8 +3,8 @@ package cn.chollter.agent.demo.config;
 import cn.chollter.agent.demo.agent.Agent;
 import cn.chollter.agent.demo.agent.Tool;
 import cn.chollter.agent.demo.core.FunctionCallingAgent;
-import cn.chollter.agent.demo.core.ReActAgent;
 import cn.chollter.agent.demo.mcp.McpManager;
+import cn.chollter.agent.demo.service.ToolCacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -18,7 +18,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,9 +30,6 @@ public class AgentConfig {
 
     @Value("${agent.model.provider:openai}")
     private String modelProvider;
-
-    @Value("${agent.type:function-calling}")
-    private String agentType;
 
     // OpenAI 配置（阿里云通义千问）
     @Value("${spring.ai.openai.base-url}")
@@ -100,10 +96,7 @@ public class AgentConfig {
 
     /**
      * 配置 Agent Bean
-     * 根据 agent.type 配置选择使用 FunctionCallingAgent 或 ReActAgent
-     *
-     * 默认使用 FunctionCallingAgent（性能更优）
-     * 如需使用 ReActAgent，设置 agent.type=react
+     * 使用 Function Calling 机制调用 MCP 工具
      */
     @Bean
     @org.springframework.context.annotation.Primary
@@ -111,41 +104,9 @@ public class AgentConfig {
             ChatModel chatModel,
             List<Tool> localTools,
             McpManager mcpManager,
-            ObjectMapper objectMapper) {
-        // 合并本地工具和MCP工具
-        List<Tool> allTools = new ArrayList<>(localTools);
-        allTools.addAll(mcpManager.getMcpTools());
-
-        return switch (agentType.toLowerCase()) {
-            case "react", "react-agent" -> {
-                log.info("使用 ReAct Agent (文本解析模式)");
-                yield new ReActAgent(chatModel, allTools, objectMapper);
-            }
-            case "function-calling", "fc", "default" -> {
-                log.info("使用 Function Calling Agent (高效模式)");
-                yield new FunctionCallingAgent(chatModel, allTools, objectMapper);
-            }
-            default -> {
-                log.warn("未知的 agent.type: {}，使用默认的 Function Calling Agent", agentType);
-                yield new FunctionCallingAgent(chatModel, allTools, objectMapper);
-            }
-        };
-    }
-
-    /**
-     * 保留原有的 ReActAgent Bean 以兼容性
-     * 标记为非 Primary，优先使用上面的 agent Bean
-     */
-    @Bean
-    public ReActAgent reactAgent(
-            ChatModel chatModel,
-            List<Tool> localTools,
-            McpManager mcpManager,
-            ObjectMapper objectMapper) {
-        // 合并本地工具和MCP工具
-        List<Tool> allTools = new ArrayList<>(localTools);
-        allTools.addAll(mcpManager.getMcpTools());
-
-        return new ReActAgent(chatModel, allTools, objectMapper);
+            ObjectMapper objectMapper,
+            ToolCacheService toolCacheService) {
+        log.info("使用 Function Calling Agent (MCP工具调用)");
+        return new FunctionCallingAgent(chatModel, localTools, objectMapper, toolCacheService, mcpManager);
     }
 }
