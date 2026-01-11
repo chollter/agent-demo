@@ -15,14 +15,22 @@ import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
+import org.springframework.boot.web.client.ClientHttpRequestFactories;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
  * Agent配置类
  * 支持多种AI模型：阿里云通义千问、本地Ollama等
+ *
+ * 注意：ClientHttpRequestFactorySettings 在 Spring Boot 3.4+ 已被标记为 deprecated
+ * 将在 Spring Boot 4.0 中移除。项目升级到 Spring Boot 4.0 时需迁移到 HttpClientSettings API。
  */
 @Slf4j
 @Configuration
@@ -48,18 +56,46 @@ public class AgentConfig {
     @Value("${spring.ai.ollama.chat.model:qwen2.5:7b}")
     private String ollamaModel;
 
+    // LLM 超时配置（默认 5 分钟）
+    @Value("${agent.llm.connect-timeout:30s}")
+    private Duration connectTimeout;
+
+    @Value("${agent.llm.read-timeout:300s}")
+    private Duration readTimeout;
+
+    /**
+     * 创建带超时配置的 RestClient.Builder
+     *
+     * @deprecated Spring Boot 3.4+ 中 ClientHttpRequestFactorySettings 已被标记为 deprecated
+     *             Spring Boot 4.0 将迁移到 HttpClientSettings API
+     */
     @Bean
-    public OpenAiApi openAiApi() {
+    @SuppressWarnings("deprecation")
+    public RestClient.Builder restClientBuilder() {
+        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
+                .withConnectTimeout(connectTimeout)
+                .withReadTimeout(readTimeout);
+
+        ClientHttpRequestFactory factory = ClientHttpRequestFactories.get(settings);
+
+        return RestClient.builder()
+                .requestFactory(factory);
+    }
+
+    @Bean
+    public OpenAiApi openAiApi(RestClient.Builder restClientBuilder) {
         return OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
+                .restClientBuilder(restClientBuilder)
                 .build();
     }
 
     @Bean
-    public OllamaApi ollamaApi() {
+    public OllamaApi ollamaApi(RestClient.Builder restClientBuilder) {
         return OllamaApi.builder()
                 .baseUrl(ollamaBaseUrl)
+                .restClientBuilder(restClientBuilder)
                 .build();
     }
 

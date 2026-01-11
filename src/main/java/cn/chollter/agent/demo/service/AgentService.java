@@ -278,7 +278,7 @@ public class AgentService {
 
     /**
      * 流式执行任务内部实现
-     * 简化版本：只流式返回最终答案，工具调用部分仍使用同步方式
+     * 使用真正的 SSE 流式响应
      */
     private Flux<ServerSentEvent<String>> executeTaskStreamInternal(
             String task,
@@ -290,60 +290,67 @@ public class AgentService {
         // 创建执行记录
         Execution execution = executionService.createExecution(conversationId, task);
         String actualConversationId = execution.getConversation().getConversationId();
+        String executionId = execution.getExecutionId();
 
-        return Flux.create(sink -> {
-            long startTime = System.currentTimeMillis();
-            try {
-                // 先执行完整的任务（包括工具调用）
-                AgentResponse response = agent.execute(task, history);
+        long startTime = System.currentTimeMillis();
+        StringBuilder fullAnswer = new StringBuilder();
+        boolean[] hasError = {false};
 
-                if (response.isSuccess() && response.getFinalAnswer() != null) {
-                    String fullAnswer = response.getFinalAnswer();
-
-                    // 模拟流式输出：按字符或词块发送
-                    int chunkSize = 10; // 每次发送 10 个字符
-                    for (int i = 0; i < fullAnswer.length(); i += chunkSize) {
-                        int end = Math.min(i + chunkSize, fullAnswer.length());
-                        String chunk = fullAnswer.substring(i, end);
-
-                        sink.next(ServerSentEvent.<String>builder()
-                                .data(chunk)
-                                .id(String.valueOf(i / chunkSize))
-                                .event("content")
-                                .build());
-
-                        // 模拟网络延迟，使流式效果更明显
-                        try {
-                            Thread.sleep(20);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-
-                    // 发送结束事件
-                    sink.next(ServerSentEvent.<String>builder()
-                            .event("end")
-                            .data(actualConversationId)
-                            .build());
-                } else {
-                    // 发送错误事件
-                    sink.next(ServerSentEvent.<String>builder()
-                            .event("error")
-                            .data(response.getErrorMessage() != null ? response.getErrorMessage() : "未知错误")
-                            .build());
+        // 调用 Agent 的流式方法
+        return agent.executeStream(task, history)
+            .doOnNext(event -> {
+                // 收集完整内容用于保存
+                if ("content".equals(event.event())) {
+                    fullAnswer.append(event.data());
+                } else if ("error".equals(event.event())) {
+                    hasError[0] = true;
                 }
-
-                sink.complete();
-
-                // 异步保存执行结果
+            })
+            .doOnComplete(() -> {
+                // 流结束后保存执行结果
                 long duration = System.currentTimeMillis() - startTime;
-                saveExecutionResultAsync(execution.getExecutionId(), response, duration);
-
-            } catch (Exception e) {
+                if (!hasError[0] && fullAnswer.length() > 0) {
+                    AgentResponse response = new AgentResponse();
+                    response.setSuccess(true);
+                    response.setFinalAnswer(fullAnswer.toString());
+                    saveExecutionResultAsync(executionId, response, duration);
+                    log.info("流式执行完成，保存结果: {}", executionId);
+                } else if (hasError[0]) {
+                    AgentResponse response = new AgentResponse();
+                    response.setSuccess(false);
+                    response.setErrorMessage("流式执行过程中发生错误");
+                    saveExecutionResultAsync(executionId, response, duration);
+                }
+            })
+            .doOnError(e -> {
                 log.error("流式执行任务失败", e);
-                sink.error(e);
-            }
-        });
+                long duration = System.currentTimeMillis() - startTime;
+                AgentResponse response = new AgentResponse();
+                response.setSuccess(false);
+                response.setErrorMessage(e.getMessage());
+                saveExecutionResultAsync(executionId, response, duration);
+            })
+            .doOnCancel(() -> {
+                // 客户端取消连接（点击停止按钮）
+                log.info("客户端取消流式执行: {}", executionId);
+                long duration = System.currentTimeMillis() - startTime;
+                // 保存已生成的内容（部分结果）
+                if (fullAnswer.length() > 0) {
+                    AgentResponse response = new AgentResponse();
+                    response.setSuccess(true); // 标记为成功，因为是用户主动停止
+                    response.setFinalAnswer(fullAnswer.toString() + "\n\n[用户停止生成]");
+                    saveExecutionResultAsync(executionId, response, duration);
+                }
+            })
+            .map(event -> {
+                // 在结束事件中添加 conversationId
+                if ("end".equals(event.event())) {
+                    return ServerSentEvent.<String>builder()
+                        .event("end")
+                        .data(actualConversationId)
+                        .build();
+                }
+                return event;
+            });
     }
 }

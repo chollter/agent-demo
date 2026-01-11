@@ -32,16 +32,44 @@ spring:
 # MCP 服务器本地配置
 mcp:
   enabled: ${MCP_ENABLED:true}
+  # 编排策略: PRIORITY(优先级), LOAD_BALANCE(负载均衡), ROUND_ROBIN(轮询), PARALLEL(并行)
+  orchestration-strategy: PRIORITY
   servers:
-    # 文件系统工具
+    # 文件系统工具（主服务器，高优先级）
     - name: filesystem
       type: stdio
-      command: ${NPX_CMD:C:\Users\Administrator\AppData\Local\nvm\v20.19.5\npx.cmd}
+      command: ${NPX_CMD:npx}
       args:
         - '-y'
         - '@modelcontextprotocol/server-filesystem'
         - ${PROJECT_PATH:.}
       enabled: ${MCP_FILESYSTEM_ENABLED:true}
+      priority: 10           # 优先级（数字越小越高）
+      weight: 3              # 负载均衡权重
+      tags:                  # 标签分组
+        - file
+        - filesystem
+        - local
+      fallback: false        # 是否为备用服务器
+
+    # GitHub 工具（中等优先级）
+    # 需要 GITHUB_TOKEN 环境变量进行身份验证
+    - name: github
+      type: stdio
+      command: ${NPX_CMD:npx}
+      args:
+        - '-y'
+        - '@modelcontextprotocol/server-github'
+      env:
+        - 'GITHUB_TOKEN=${GITHUB_TOKEN}'
+      enabled: ${MCP_GITHUB_ENABLED:true}
+      priority: 20
+      weight: 2
+      tags:
+        - github
+        - code
+        - remote
+        - scm
 
 # 日志配置（本地开发更详细）
 logging:

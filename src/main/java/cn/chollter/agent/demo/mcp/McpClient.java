@@ -28,6 +28,7 @@ public class McpClient implements AutoCloseable {
 
     private static final int TIMEOUT_MS = 30000;
     private static final long REQUEST_ID_MASK = 0xFFFFFFFFL;
+    private volatile boolean running = true;
 
     private static class RequestContext {
         final long requestId;
@@ -85,17 +86,26 @@ public class McpClient implements AutoCloseable {
         ));
 
         Map<String, Object> response = sendRequest("initialize", params);
-        log.info("MCP服务器 {} 初始化成功", serverName);
+        log.info("MCP服务器 {} 初始化成功: {}", serverName, response);
 
         // 发送initialized通知
         sendNotification("notifications/initialized", Map.of());
+
+        // 等待服务器处理initialized通知
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        log.debug("服务器 {} 已完成初始化握手", serverName);
     }
 
     private void startResponseHandler() {
         Thread handler = new Thread(() -> {
             try {
                 String line;
-                while ((line = reader.readLine()) != null) {
+                while (running && (line = reader.readLine()) != null) {
                     if (line.isEmpty()) continue;
                     String trimmedLine = line.trim();
                     if (!trimmedLine.startsWith("{")) {
@@ -111,7 +121,11 @@ public class McpClient implements AutoCloseable {
                     }
                 }
             } catch (IOException e) {
-                log.error("MCP响应处理器错误", e);
+                if (running) {
+                    log.error("MCP响应处理器错误", e);
+                } else {
+                    log.debug("MCP响应处理器正常关闭");
+                }
             }
         });
         handler.setDaemon(true);
@@ -122,19 +136,30 @@ public class McpClient implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void handleResponse(Map<String, Object> message) {
         Object id = message.get("id");
+        log.debug("收到消息: id={}, keys={}", id, message.keySet());
+
         if (id instanceof Number) {
             long requestId = ((Number) id).longValue() & REQUEST_ID_MASK;
             RequestContext context = pendingRequests.remove(requestId);
             if (context != null) {
                 synchronized (context.lock) {
                     if (message.containsKey("result")) {
-                        context.result = String.valueOf(message.get("result"));
+                        try {
+                            Object resultObj = message.get("result");
+                            log.debug("序列化结果: type={}, value={}", resultObj.getClass(), resultObj);
+                            context.result = objectMapper.writeValueAsString(resultObj);
+                        } catch (Exception e) {
+                            log.error("序列化结果失败", e);
+                            context.result = "{\"error\": \"Failed to serialize result\"}";
+                        }
                     } else if (message.containsKey("error")) {
                         Map<String, Object> error = (Map<String, Object>) message.get("error");
-                        context.result = "Error: " + error.get("message");
+                        context.result = "{\"error\": \"" + error.get("message") + "\"}";
                     }
                     context.lock.notifyAll();
                 }
+            } else {
+                log.warn("未找到对应的请求上下文: id={}", requestId);
             }
         }
     }
@@ -153,6 +178,7 @@ public class McpClient implements AutoCloseable {
         }
 
         String json = objectMapper.writeValueAsString(request);
+        log.debug("发送请求: {}", json);
         synchronized (writer) {
             writer.write(json);
             writer.write("\n");
@@ -170,12 +196,26 @@ public class McpClient implements AutoCloseable {
         }
 
         if (context.result == null) {
+            log.error("请求超时: method={}, id={}", method, id);
             throw new IOException("请求超时");
         }
 
+        log.debug("收到响应: method={}, result={}", method, context.result);
+
         try {
-            return objectMapper.readValue(context.result, Map.class);
+            Map<String, Object> fullResponse = objectMapper.readValue(context.result, Map.class);
+            log.debug("解析后的响应: method={}, response={}", method, fullResponse);
+
+            // 返回 result 字段，如果不存在则返回整个响应
+            Object result = fullResponse.get("result");
+            if (result instanceof Map) {
+                return (Map<String, Object>) result;
+            }
+
+            // 如果没有 result 字段或不是 Map 类型，返回整个响应
+            return fullResponse;
         } catch (Exception e) {
+            log.error("解析响应失败: method={}, result={}, error={}", method, context.result, e.getMessage());
             return Map.of("result", context.result);
         }
     }
@@ -197,11 +237,18 @@ public class McpClient implements AutoCloseable {
     }
 
     public List<Map<String, Object>> listTools() throws IOException {
+        // sendRequest 现在直接返回 result 字段，包含 tools 键
         Map<String, Object> response = sendRequest("tools/list", Map.of());
-        Object result = response.get("result");
-        if (result instanceof Map) {
-            return (List<Map<String, Object>>) ((Map<?, ?>) result).get("tools");
+        log.debug("tools/list 响应: {}", response);
+
+        Object tools = response.get("tools");
+        if (tools instanceof List) {
+            List<Map<String, Object>> toolList = (List<Map<String, Object>>) tools;
+            log.info("获取到 {} 个工具", toolList.size());
+            return toolList;
         }
+
+        log.warn("无法解析工具列表，响应: {}", response);
         return Collections.emptyList();
     }
 
@@ -247,6 +294,9 @@ public class McpClient implements AutoCloseable {
 
     @Override
     public void close() {
+        // 先设置停止标志，让响应处理器线程优雅退出
+        running = false;
+
         try {
             sendNotification("shutdown", Map.of());
             sendNotification("notifications/exit", Map.of());
