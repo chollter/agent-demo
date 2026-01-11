@@ -54,6 +54,14 @@ server:
   tomcat:
     max-threads: 200
     accept-count: 100
+    # SSE 长连接超时配置（毫秒）
+    # connection-timeout: 连接建立超时
+    # keep-alive-timeout: 保持连接超时
+    connection-timeout: 30000
+    keep-alive-timeout: 300000  # 5 分钟，支持长 SSE 连接
+    threads:
+      # 允许更多线程处理 SSE 长连接
+      min-spare: 10
 
 # Agent 通用配置
 agent:
@@ -70,12 +78,22 @@ agent:
       period: ${AGENT_RATE_LIMIT_PERIOD:60}  # 补充周期（秒）
   model:
     provider: ${AGENT_MODEL_PROVIDER:openai}
+  # LLM 超时配置
+  llm:
+    connect-timeout: ${AGENT_LLM_CONNECT_TIMEOUT:30s}  # HTTP 连接超时
+    read-timeout: ${AGENT_LLM_READ_TIMEOUT:300s}  # HTTP 读取超时（5 分钟）
+    write-timeout: ${AGENT_LLM_WRITE_TIMEOUT:30s}  # HTTP 写入超时
+    stream-timeout: ${AGENT_LLM_STREAM_TIMEOUT:4m}  # 流式响应超时（4 分钟）
   # 对话历史配置
   history:
     enabled: ${AGENT_HISTORY_ENABLED:true}  # 是否启用对话历史
     max-messages: ${AGENT_HISTORY_MAX_MESSAGES:20}  # 最大历史消息条数
     max-tokens: ${AGENT_HISTORY_MAX_TOKENS:4000}  # 最大历史 token 数量（避免超出模型限制）
     recent-first: ${AGENT_HISTORY_RECENT_FIRST:true}  # 优先保留最近的消息
+
+  # 工具执行超时配置
+  tool:
+    timeout: ${AGENT_TOOL_TIMEOUT:30s}  # 工具执行超时时间（默认30秒）
 
 # Spring AI 配置（所有环境共享）
 spring.ai:
@@ -86,7 +104,7 @@ spring.ai:
     chat:
       model: ${AI_MODEL:qwen-max}
       temperature: ${AI_TEMPERATURE:0.7}
-      max-tokens: ${AI_MAX_TOKENS:2000}
+      max-tokens: ${AI_MAX_TOKENS:8000}  # 增加到8000，防止工具调用被截断
 
   # 本地 Ollama 配置
   ollama:

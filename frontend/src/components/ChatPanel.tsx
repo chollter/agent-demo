@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input, Button, Avatar, Empty } from 'antd'
-import { SendOutlined, UserOutlined, RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { SendOutlined, StopOutlined, UserOutlined, RobotOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -15,7 +15,10 @@ interface Message {
   content: string
   timestamp: string
   thoughtSteps?: any[]
+  thoughtStepsData?: any[]
+  toolCalls?: string[]
   success?: boolean
+  streaming?: boolean
   tokenStats?: {
     totalTokens: number
     inputTokens: number
@@ -27,9 +30,10 @@ interface ChatPanelProps {
   messages: Message[]
   onSendMessage: (content: string) => void
   loading: boolean
+  onStopGeneration?: () => void
 }
 
-export default function ChatPanel({ messages, onSendMessage, loading }: ChatPanelProps) {
+export default function ChatPanel({ messages, onSendMessage, loading, onStopGeneration }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [inputValue, setInputValue] = useState('')
 
@@ -180,39 +184,45 @@ export default function ChatPanel({ messages, onSendMessage, loading }: ChatPane
                   lineHeight: '1.6'
                 }}>
                   {message.role === 'assistant' ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        code({ node, inline, className, children, ...props }: any) {
-                          const match = /language-(\w+)/.exec(className || '')
-                          return !inline && match ? (
-                            <SyntaxHighlighter
-                              style={oneDark}
-                              language={match[1]}
-                              PreTag="div"
-                              {...props}
-                            >
-                              {String(children).replace(/\n$/, '')}
-                            </SyntaxHighlighter>
-                          ) : (
-                            <code
-                              style={{
-                                background: '#f1f5f9',
-                                padding: '2px 6px',
-                                borderRadius: 4,
-                                fontSize: '0.9em',
-                                color: '#e11d48'
-                              }}
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          )
-                        }
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                    <>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          code({ node, inline, className, children, ...props }: any) {
+                            const match = /language-(\w+)/.exec(className || '')
+                            return !inline && match ? (
+                              <SyntaxHighlighter
+                                style={oneDark}
+                                language={match[1]}
+                                PreTag="div"
+                                {...props}
+                              >
+                                {String(children).replace(/\n$/, '')}
+                              </SyntaxHighlighter>
+                            ) : (
+                              <code
+                                style={{
+                                  background: '#f1f5f9',
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  fontSize: '0.9em',
+                                  color: '#e11d48'
+                                }}
+                                {...props}
+                              >
+                                {children}
+                              </code>
+                            )
+                          }
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                      {/* 流式输出指示器 */}
+                      {message.streaming && (
+                        <span className="streaming-cursor"></span>
+                      )}
+                    </>
                   ) : (
                     <div>{message.content}</div>
                   )}
@@ -334,6 +344,7 @@ export default function ChatPanel({ messages, onSendMessage, loading }: ChatPane
             onKeyDown={handleKeyPress}
             placeholder="输入消息... (Enter 发送，Shift+Enter 换行)"
             autoSize={{ minRows: 1, maxRows: 6 }}
+            disabled={loading}
             style={{
               fontSize: 14,
               border: 'none',
@@ -343,22 +354,40 @@ export default function ChatPanel({ messages, onSendMessage, loading }: ChatPane
               boxShadow: 'none'
             }}
           />
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleSend}
-            disabled={!inputValue.trim() || loading}
-            style={{
-              height: 40,
-              borderRadius: 10,
-              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-              border: 'none',
-              boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
-              flexShrink: 0
-            }}
-          >
-            发送
-          </Button>
+          {loading ? (
+            <Button
+              type="primary"
+              danger
+              icon={<StopOutlined />}
+              onClick={onStopGeneration}
+              style={{
+                height: 40,
+                borderRadius: 10,
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.3)',
+                flexShrink: 0
+              }}
+            >
+              停止
+            </Button>
+          ) : (
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={handleSend}
+              disabled={!inputValue.trim()}
+              style={{
+                height: 40,
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+                flexShrink: 0
+              }}
+            >
+              发送
+            </Button>
+          )}
         </div>
         <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
           AI Agent 基于 ReAct 模式，可以理解并执行复杂任务

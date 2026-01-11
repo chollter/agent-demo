@@ -53,4 +53,14 @@ public interface Tool {
     default Duration getCacheTtl() {
         return Duration.ofMinutes(5);
     }
+
+    /**
+     * 获取工具执行超时时间
+     * 工具执行超过此时间将被中断并抛出 ToolTimeoutException
+     *
+     * @return 超时时间，默认 null 表示使用全局配置
+     */
+    default Duration getTimeout() {
+        return null;  // 使用全局配置
+    }
 }

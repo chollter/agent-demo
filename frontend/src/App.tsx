@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Layout, message } from 'antd'
 import { PlusOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import ChatPanel from './components/ChatPanel'
 import ConversationList from './components/ConversationList'
 import ThoughtSteps from './components/ThoughtSteps'
 import Settings from './components/Settings'
-import { API_CONFIG } from './config/api'
+import { useSSE } from './hooks/useSSE'
 import './App.css'
 
 const { Header, Content, Sider } = Layout
@@ -22,7 +22,10 @@ function App() {
       content: string
       timestamp: string
       thoughtSteps?: any[]
+      thoughtStepsData?: any[]  // 流式思考步骤
+      toolCalls?: string[]  // 流式工具调用记录
       success?: boolean
+      streaming?: boolean  // 是否正在流式生成中
       tokenStats?: {
         totalTokens: number
         inputTokens: number
@@ -33,8 +36,17 @@ function App() {
 
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
   const [settingsVisible, setSettingsVisible] = useState(false)
+  const { sendSSE } = useSSE()
 
-  const handleSendMessage = async (content: string) => {
+  // 存储当前SSE请求的controller，用于中止
+  const sseControllerRef = useRef<ReturnType<typeof sendSSE> | null>(null)
+
+  const handleSendMessage = (content: string) => {
+    // 中止之前的SSE请求
+    if (sseControllerRef.current) {
+      sseControllerRef.current.abort()
+      sseControllerRef.current = null
+    }
 
     // 创建或获取对话
     let conversationId = currentConversationId
@@ -72,79 +84,116 @@ function App() {
       return conv
     }))
 
-    try {
-      // 调用 API
-      const response = await fetch(`${API_CONFIG.baseUrl}/api/agent/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          task: content,
-          conversationId: backendConversationId  // 使用后端返回的 conversationId
-        })
-      })
+    // 创建流式助手消息（初始状态）
+    const assistantMessageId = (Date.now() + 1).toString()
+    const initialAssistantMessage = {
+      id: assistantMessageId,
+      role: 'assistant' as const,
+      content: '',
+      timestamp: new Date().toISOString(),
+      streaming: true,
+      thoughtStepsData: [],
+      toolCalls: []
+    }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+    setConversations(prev => prev.map(conv => {
+      if (conv.id === conversationId) {
+        return {
+          ...conv,
+          messages: [...conv.messages, initialAssistantMessage]
+        }
       }
+      return conv
+    }))
 
-      const data = await response.json()
-
-      // 保存后端返回的 conversationId
-      if (data.conversationId && !backendConversationId) {
+    // 发送 SSE 请求并保存 controller
+    const controller = sendSSE(content, backendConversationId, {
+      onMessage: (msg) => {
         setConversations(prev => prev.map(conv => {
           if (conv.id === conversationId) {
-            return { ...conv, backendConversationId: data.conversationId }
+            const messages = [...conv.messages]
+            const lastMessage = messages[messages.length - 1]
+
+            if (lastMessage?.id === assistantMessageId) {
+              // 更新流式消息
+              if (msg.type === 'content') {
+                lastMessage.content += msg.data
+              } else if (msg.type === 'tool_call') {
+                lastMessage.toolCalls = [...(lastMessage.toolCalls || []), `工具调用: ${msg.data}`]
+                lastMessage.thoughtStepsData = [
+                  ...(lastMessage.thoughtStepsData || []),
+                  { type: 'ACTION', description: `调用工具: ${msg.data}` }
+                ]
+              } else if (msg.type === 'tool_result') {
+                lastMessage.toolCalls = [...(lastMessage.toolCalls || []), `工具结果: ${msg.data.substring(0, 100)}...`]
+                lastMessage.thoughtStepsData = [
+                  ...(lastMessage.thoughtStepsData || []),
+                  { type: 'OBSERVATION', description: msg.data.substring(0, 200) }
+                ]
+              } else if (msg.type === 'error') {
+                lastMessage.content += `\n\n错误: ${msg.data}`
+                lastMessage.success = false
+              }
+            }
+            return { ...conv, messages }
           }
           return conv
         }))
-        backendConversationId = data.conversationId
-      }
+      },
+      onError: (error) => {
+        console.error('SSE error:', error)
+        message.error('连接中断，请重试')
 
-      // 添加助手消息
-      const assistantMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant' as const,
-        content: data.finalAnswer || data.errorMessage || '抱歉，出现问题',
-        timestamp: new Date().toISOString(),
-        thoughtSteps: data.thoughtSteps || [],
-        success: data.success,
-        tokenStats: data.tokenStats || undefined
-      }
+        setConversations(prev => prev.map(conv => {
+          if (conv.id === conversationId) {
+            const messages = [...conv.messages]
+            const lastMessage = messages[messages.length - 1]
 
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === conversationId) {
-          return {
-            ...conv,
-            messages: [...conv.messages, assistantMessage]
+            if (lastMessage?.id === assistantMessageId) {
+              lastMessage.content = '错误：' + error.message
+              lastMessage.success = false
+              lastMessage.streaming = false
+            }
+            return { ...conv, messages }
           }
-        }
-        return conv
-      }))
+          return conv
+        }))
+        // 清除 controller
+        sseControllerRef.current = null
+      },
+      onComplete: (convId) => {
+        setConversations(prev => prev.map(conv => {
+          if (conv.id === conversationId) {
+            const messages = [...conv.messages]
+            const lastMessage = messages[messages.length - 1]
 
-    } catch (error) {
-      console.error('Error sending message:', error)
-      message.error('发送失败，请检查网络连接')
+            if (lastMessage?.id === assistantMessageId) {
+              lastMessage.streaming = false
+              lastMessage.thoughtSteps = lastMessage.thoughtStepsData || []
 
-      // 添加错误消息
-      const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant' as const,
-        content: `错误：${error instanceof Error ? error.message : '未知错误'}`,
-        timestamp: new Date().toISOString()
-      }
+              // 如果没有内容且有错误，显示失败状态
+              if (!lastMessage.content && !lastMessage.success) {
+                lastMessage.success = false
+                lastMessage.content = '抱歉，未能获取响应'
+              } else if (lastMessage.content) {
+                lastMessage.success = true
+              }
+            }
 
-      setConversations(prev => prev.map(conv => {
-        if (conv.id === conversationId) {
-          return {
-            ...conv,
-            messages: [...conv.messages, errorMessage]
+            // 保存后端返回的 conversationId
+            if (convId && !conv.backendConversationId) {
+              return { ...conv, backendConversationId: convId, messages }
+            }
+            return { ...conv, messages }
           }
-        }
-        return conv
-      }))
-    }
+          return conv
+        }))
+        // 清除 controller
+        sseControllerRef.current = null
+      }
+    })
+
+    sseControllerRef.current = controller
   }
 
   const handleNewConversation = () => {
@@ -159,6 +208,28 @@ function App() {
     setConversations(prev => prev.filter(conv => conv.id !== id))
     if (currentConversationId === id) {
       setCurrentConversationId(null)
+    }
+  }
+
+  const handleStopGeneration = () => {
+    if (sseControllerRef.current) {
+      sseControllerRef.current.abort()
+      sseControllerRef.current = null
+
+      // 更新当前流式消息状态
+      setConversations(prev => prev.map(conv => {
+        if (conv.id === currentConversationId) {
+          const messages = [...conv.messages]
+          const lastMessage = messages[messages.length - 1]
+
+          if (lastMessage?.streaming) {
+            lastMessage.streaming = false
+            lastMessage.content += '\n\n*（已停止生成）*'
+          }
+          return { ...conv, messages }
+        }
+        return conv
+      }))
     }
   }
 
@@ -287,7 +358,8 @@ function App() {
             <ChatPanel
               messages={currentConversation?.messages || []}
               onSendMessage={handleSendMessage}
-              loading={false}
+              loading={currentConversation?.messages.some(m => m.streaming) ?? false}
+              onStopGeneration={handleStopGeneration}
             />
           </div>
 
@@ -325,7 +397,7 @@ function App() {
             <ThoughtSteps
               steps={currentConversation?.messages
                 .filter(m => m.role === 'assistant')
-                .flatMap(m => m.thoughtSteps || []) || []
+                .flatMap(m => m.thoughtStepsData || m.thoughtSteps || []) || []
               }
             />
           </div>

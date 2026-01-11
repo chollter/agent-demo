@@ -2,8 +2,10 @@ package cn.chollter.agent.demo.mcp;
 
 import cn.chollter.agent.demo.agent.Tool;
 import cn.chollter.agent.demo.config.McpConfig;
+import cn.chollter.agent.demo.mcp.orchestration.McpOrchestrator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +18,7 @@ import java.util.stream.Collectors;
 /**
  * MCP管理器
  * 管理所有MCP服务器连接和工具
- * 支持工具列表缓存
+ * 支持工具列表缓存和多服务器编排
  */
 @Slf4j
 @Component
@@ -24,22 +26,27 @@ public class McpManager {
 
     private final Map<String, McpClient> clients = new ConcurrentHashMap<>();
     private final List<Tool> mcpTools = new ArrayList<>();
-    private final ObjectMapper objectMapper;
     private final McpConfig mcpConfig;
+    private final ObjectMapper objectMapper;
+    private final McpOrchestrator orchestrator;
 
     // 工具列表缓存，10分钟过期，5分钟刷新
     private final LoadingCache<String, List<Map<String, Object>>> toolCache;
 
-    public McpManager(McpConfig mcpConfig, ObjectMapper objectMapper) {
+    /**
+     * 构造函数
+     */
+    public McpManager(McpConfig mcpConfig, ObjectMapper objectMapper, McpOrchestrator orchestrator) {
         this.mcpConfig = mcpConfig;
         this.objectMapper = objectMapper;
+        this.orchestrator = orchestrator;
 
         // 初始化工具列表缓存
         this.toolCache = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
-            .expireAfterWrite(10, TimeUnit.MINUTES)
-            .refreshAfterWrite(5, TimeUnit.MINUTES)
-            .maximumSize(100)
-            .build(this::loadToolsFromServer);
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .refreshAfterWrite(5, TimeUnit.MINUTES)
+                .maximumSize(100)
+                .build(this::loadToolsFromServer);
 
         initialize();
     }
@@ -85,6 +92,13 @@ public class McpManager {
             );
 
             clients.put(serverConfig.getName(), client);
+            // 注册到编排器
+            orchestrator.registerClient(serverConfig.getName(), client);
+            log.info("服务器 {} 优先级: {}, 权重: {}, 标签: {}",
+                    serverConfig.getName(),
+                    serverConfig.getPriority(),
+                    serverConfig.getWeight(),
+                    serverConfig.getTags());
 
             // 从缓存获取服务器提供的工具列表
             List<Map<String, Object>> tools = getToolsFromCache(serverConfig.getName(), client);
@@ -151,10 +165,13 @@ public class McpManager {
             oldClient.close();
         }
 
+        // 从编排器注销
+        orchestrator.unregisterClient(serverName);
+
         // 重新初始化
         Optional<McpConfig.McpServer> serverConfig = mcpConfig.getServers().stream()
-            .filter(s -> s.getName().equals(serverName))
-            .findFirst();
+                .filter(s -> s.getName().equals(serverName))
+                .findFirst();
 
         if (serverConfig.isPresent() && serverConfig.get().isEnabled()) {
             try {
@@ -163,6 +180,13 @@ public class McpManager {
                 log.error("重新加载MCP服务器失败: {}", serverName, e);
             }
         }
+    }
+
+    /**
+     * 获取编排器统计信息
+     */
+    public Map<String, Object> getOrchestrationStats() {
+        return orchestrator.getStats();
     }
 
     // ==================== 缓存相关方法 ====================

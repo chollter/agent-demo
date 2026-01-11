@@ -202,3 +202,24 @@ input:focus {
   animation: shimmer 1.5s infinite;
   border-radius: 4px;
 }
+
+/* 流式输出光标 */
+.streaming-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background: #3b82f6;
+  margin-left: 2px;
+  border-radius: 2px;
+  animation: blink 1s infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
